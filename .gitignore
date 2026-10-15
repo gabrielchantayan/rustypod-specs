@@ -1,0 +1,12 @@
+drafts/
+reviews/
+audit/
+state/
+jobs/
+*.c
+*.h
+*.rs
+*.db
+*.db-*
+.env
+auth*
