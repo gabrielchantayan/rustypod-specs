@@ -1,8 +1,8 @@
 {
-  "functions_documented": 1,
+  "functions_documented": 2,
   "implementation_ready": 0,
   "drafts": 0,
-  "quarantined": 1,
+  "quarantined": 3,
   "source_units_inventoried": 32189,
   "runtime_validated": 0,
   "note": "Counts reflect reviewed published function contracts; source file count is not a verified total function count."
