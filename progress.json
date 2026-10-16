@@ -1,5 +1,5 @@
 {
-  "functions_documented": 756,
+  "functions_documented": 757,
   "implementation_ready": 60,
   "drafts": 2,
   "quarantined": 0,
@@ -9,8 +9,8 @@
   "service_status": "running",
   "revision_pending": 0,
   "blocked": 35,
-  "remaining_source_units": 31398,
-  "last_health_update": 1792127239.1058285,
+  "remaining_source_units": 31397,
+  "last_health_update": 1792127300.9242175,
   "writer_slots": 3,
   "reviewer_slots": 1
 }
