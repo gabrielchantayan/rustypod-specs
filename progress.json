@@ -1,16 +1,16 @@
 {
-  "functions_documented": 1727,
+  "functions_documented": 1728,
   "implementation_ready": 66,
-  "drafts": 10,
+  "drafts": 8,
   "quarantined": 0,
   "source_units_inventoried": 32189,
   "runtime_validated": 0,
   "note": "Counts reflect reviewed published function contracts; source file count is not a verified total function count.",
   "service_status": "running",
   "revision_pending": 0,
-  "blocked": 92,
-  "remaining_source_units": 30370,
-  "last_health_update": 1792212735.2441845,
+  "blocked": 93,
+  "remaining_source_units": 30368,
+  "last_health_update": 1792212763.5749638,
   "writer_slots": 12,
   "reviewer_slots": 1
 }
