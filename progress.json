@@ -6,11 +6,11 @@
   "source_units_inventoried": 32189,
   "runtime_validated": 0,
   "note": "Counts reflect reviewed published function contracts; source file count is not a verified total function count.",
-  "service_status": "needs_attention",
+  "service_status": "paused",
   "revision_pending": 1,
   "blocked": 159,
   "remaining_source_units": 28120,
-  "last_health_update": 1792424906.7776334,
-  "writer_slots": 1,
+  "last_health_update": 1792425389.4476957,
+  "writer_slots": 4,
   "reviewer_slots": 1
 }
