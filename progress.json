@@ -1,5 +1,5 @@
 {
-  "functions_documented": 3963,
+  "functions_documented": 3964,
   "implementation_ready": 76,
   "drafts": 18,
   "quarantined": 0,
@@ -8,9 +8,9 @@
   "note": "Counts reflect reviewed published function contracts; source file count is not a verified total function count.",
   "service_status": "running",
   "revision_pending": 1,
-  "blocked": 160,
-  "remaining_source_units": 28066,
-  "last_health_update": 1792429453.2987747,
+  "blocked": 161,
+  "remaining_source_units": 28064,
+  "last_health_update": 1792429496.2371671,
   "writer_slots": 6,
   "reviewer_slots": 1
 }
