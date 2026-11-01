@@ -7,10 +7,10 @@
   "runtime_validated": 0,
   "note": "Counts reflect reviewed published function contracts; source file count is not a verified total function count.",
   "service_status": "running",
-  "revision_pending": 82,
+  "revision_pending": 81,
   "blocked": 0,
   "remaining_source_units": 21492,
-  "last_health_update": 1793556698.8779197,
+  "last_health_update": 1793557601.3325803,
   "writer_slots": 4,
   "reviewer_slots": 1
 }
