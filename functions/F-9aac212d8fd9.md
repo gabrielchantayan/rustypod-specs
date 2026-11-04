@@ -3,11 +3,11 @@
 
 ## Purpose
 
-F-9aac212d8fd9 performs an ordered update of a caller-supplied destination using a second, opaque input. It always invokes an update operation on the destination address at byte offset 12. It conditionally invokes another update operation on the destination address at byte offset 4.
+F-9aac212d8fd9 performs an unconditional update to one location associated with a destination, then conditionally updates a second location after constructing and processing temporary state.
 
-The condition for omitting the second update depends on a one-byte status produced through a dependency and, on one branch, the zero-versus-nonzero result of a comparison-like dependency.
+The established behavior is a sequence of opaque dependency calls, a one-byte status test, and, on one branch, a zero/nonzero result test. The function has no explicit return value.
 
-This is a source-facing behavioral contract. The established behavior is the ordering of calls, their argument relationships, the status test, and the conditional destination update. Text parsing, fragment handling, string ownership, and resource destruction are possible interpretations, not established semantics.
+The call pattern suggests a conversion, extraction, or normalization operation with temporary-object management. That interpretation is **inferred intent**, not an established semantic contract. In particular, the evidence does not establish that any dependency parses text, releases memory, compares strings, or assigns an owning object.
 
 ## Interface
 
@@ -15,219 +15,240 @@ This is a source-facing behavioral contract. The established behavior is the ord
 
 The function accepts two arguments:
 
-- **Destination base:** a 32-bit address-like value. The function forms addresses at byte offsets 12 and 4 from this value and passes them to F-151ab4bfe553.
-- **Opaque input:** a 32-bit value forwarded unchanged to several dependencies. Its interpretation as a pointer, handle, object reference, or scalar is not established.
+- **Destination base:** a 32-bit integer used as an address base. Two derived addresses are passed to F-151ab4bfe553:
+  - destination base plus 12 bytes;
+  - destination base plus 4 bytes.
+- **Source token:** an opaque 32-bit value forwarded to several dependencies.
 
-The visible interface returns no value. It does not expose a success indicator or an error code.
+The source token may represent an address, handle, or scalar. Its interpretation is unknown.
 
-### Local storage
+The destination base must permit the derived-address operations required by the dependencies. The supplied evidence does not establish allocation size, alignment, object type, nullability, or the widths of memory accessed at those addresses. Offsets of 4 and 12 bytes do not by themselves prove that either destination component is four bytes wide.
 
-The visible body provides four local storage regions:
+### Output
 
-| Region | Visible size | Observed use |
-|---|---:|---|
-| Working storage | 4 bytes | Passed by address to several dependencies |
-| Adjacent value slot | 4 bytes | Read as a 32-bit value on the comparison branch |
-| Status storage | 4 bytes | Passed by address to F-b531694e1061; only its first byte is tested |
-| Intermediate storage | 8 bytes | Passed by address to F-b9acea4b06ad and later F-289ec4311c64 |
+There is no explicit value returned to the caller. Observable results are dependency calls, their effects, and any effects on destination-associated or other reachable state.
 
-The working storage and adjacent value slot are consecutive in the visible stack layout. They may represent parts of a larger dependency-defined object, but that interpretation is not established. In particular, the visible body does not directly initialize the adjacent value slot before reading it. Any valid initialization must arise through dependency behavior or another property not established by this body.
+A machine return-register value, if any, is not established as an output contract.
 
-The status storage is also not directly initialized before being passed to F-b531694e1061. Correct execution therefore requires that the subsequent first-byte read be meaningful under that dependency’s contract.
+### Temporary storage
 
-### Preconditions
+The function provides dependencies with addresses into local storage comprising:
 
-Defined, successful execution requires at least the following:
+- an eight-byte temporary area, called **temporary A** here;
+- a four-byte temporary area, called **temporary B**;
+- a separate four-byte slot immediately following temporary B in the supplied layout, called the **adjacent word**;
+- a four-byte status area, of which this function explicitly reads only the first byte.
 
-- The destination-derived addresses must be acceptable to F-151ab4bfe553.
-- The opaque input must be acceptable to every dependency reached on the selected path.
-- Dependencies using local storage must honor a compatible storage and lifetime contract.
-- The first status byte must be valid when read.
-- On the comparison branch, the adjacent 32-bit value slot must be valid when read.
-- Dependencies must return normally for the later operations described here to occur.
+These labels describe storage roles, not recovered object types.
 
-The visible body checks none of these requirements.
-
-Offset formation is address arithmetic over the visible 32-bit representation. There is no explicit bounds, alignment, null, or overflow check. The evidence does not establish a portable contract for address wraparound or invalid destination addresses.
+The adjacent word is later read as a 32-bit argument. The visible function does not explicitly initialize it. It may be part of a larger object populated through temporary B, but that is not established by the supplied evidence. Safe execution of the branch that reads it therefore depends on a dependency or another valid mechanism making the read meaningful.
 
 ## Behavior
 
-### 1. Unconditional destination-offset-12 operation
+The ordering below applies when each dependency returns normally. A dependency that does not return prevents subsequent steps from being reached.
 
-The first operation calls F-44362605ab79 with the opaque input.
+### 1. Unconditional destination-associated update
 
-Its 32-bit result is then supplied as the second argument to F-151ab4bfe553. The first argument is the destination base plus 12 bytes.
+The function calls F-44362605ab79 with the original source token and captures its 32-bit result.
 
-This update invocation precedes creation of the intermediate storage state, production of the status byte, and every decision about whether to update destination offset 4.
+It then calls F-151ab4bfe553 with:
 
-No visible rollback exists. If a later dependency fails to return normally, the earlier update may already have produced effects.
+- the address 12 bytes beyond the destination base;
+- that captured result.
 
-### 2. Intermediate preparation and status production
+This call precedes all construction or processing of the local temporary areas.
 
-F-b9acea4b06ad is called with:
+The function itself does not show a direct store through the destination address. Whether F-151ab4bfe553 stores a value, performs a more complex assignment, or has other effects is unknown.
 
-1. The address of the eight-byte intermediate storage.
-2. The original opaque input.
+### 2. Temporary construction and processing
 
-Its 32-bit result is passed immediately to F-b531694e1061. That dependency receives five arguments, in order:
+The function calls F-b9acea4b06ad with:
 
-1. The address of the four-byte working storage.
-2. The result returned by F-b9acea4b06ad.
-3. The integer value 35, hexadecimal 0x23.
-4. The integer value zero.
-5. The address of the four-byte status storage.
+- the address of temporary A;
+- the original source token.
 
-The value 35 corresponds to `#` in ASCII-compatible encodings. This numeric correspondence does not establish delimiter semantics or any particular encoding contract.
+Its 32-bit result is then passed to F-b531694e1061. That call receives, in order:
 
-After F-b531694e1061 returns, F-289ec4311c64 is called with the intermediate-storage address. Only after that call returns does F-9aac212d8fd9 inspect the first status byte.
+1. the address of temporary B;
+2. the result from F-b9acea4b06ad;
+3. the numeric constant 35, equivalently hexadecimal 0x23;
+4. zero;
+5. the address of the status area.
 
-Consequently, the branch is determined by the status byte as it exists **after** the intermediate-storage call to F-289ec4311c64. It is not necessarily a preserved snapshot of the value immediately following F-b531694e1061. The visible body does not establish that intervening dependencies preserve all other state.
+The constant 35 is established as an argument value. Its meaning—such as a character code, delimiter, selector, or mode—is unknown.
 
-### 3. Zero-status path
+After F-b531694e1061 returns, the function calls F-289ec4311c64 with the address of temporary A.
 
-If the first status byte is zero:
+Only after that call returns does the function read the first byte of the status area. Consequently, the branch is determined by the byte present at that time, not necessarily by a value observed immediately after F-b531694e1061.
 
-1. F-46f0b3cb316e receives the working-storage address and the original opaque input.
-2. F-cec639934d47 receives the working-storage address. Its return value, if any, is not used.
-3. F-44362605ab79 is called again with the original opaque input.
-4. F-4a6c0bf0740c receives the current 32-bit contents of the adjacent value slot as its first argument and the new result from F-44362605ab79 as its second argument.
+### 3. Zero-status branch
 
-The comparison dependency’s result is interpreted only as zero or nonzero:
+If the first status byte is zero, the function performs the following operations in order:
 
-- **Zero:** skip the explicit destination-offset-4 update sequence.
-- **Nonzero:** perform that update sequence.
+1. Calls F-46f0b3cb316e with the address of temporary B and the original source token.
+2. Calls F-cec639934d47 with the address of temporary B.
+3. Calls F-44362605ab79 again with the original source token and captures its 32-bit result.
+4. Reads the adjacent word and calls F-4a6c0bf0740c with that word as its first argument and the newly captured result as its second argument.
 
-The sign and magnitude of a nonzero result do not affect control flow.
+The result of F-4a6c0bf0740c is tested as a 32-bit integer:
 
-The two calls to F-44362605ab79 with the original input are distinct observable calls. They must not be treated as one cached conversion: intervening dependencies may change relevant state, and the dependency itself may have observable effects.
+- **Zero:** skip the destination-base-plus-4 update and proceed directly to final processing of temporary B.
+- **Nonzero:** continue to the destination-base-plus-4 update.
 
-The adjacent value slot is read after F-cec639934d47 and the second input-based call to F-44362605ab79. Its earlier contents are not captured by the visible body.
+The repeated call to F-44362605ab79 is a new invocation. The function does not reuse its earlier result, and the evidence does not justify assuming that the two calls return equal values.
 
-### 4. Nonzero-status path
+The call to F-cec639934d47 occurs before the adjacent word is read and before the result test. Its return value is not used by this function.
 
-If the first status byte is nonzero, F-cec639934d47 is called with the working-storage address.
+### 4. Nonzero-status branch
 
-This branch does not call F-46f0b3cb316e, does not make the second input-based call to F-44362605ab79, and does not call F-4a6c0bf0740c.
+If the first status byte is nonzero, the function calls F-cec639934d47 with the address of temporary B and then proceeds directly to the destination-base-plus-4 update.
 
-After F-cec639934d47 returns, execution proceeds directly to the destination-offset-4 update sequence. Every nonzero first-byte value takes this same branch.
+This branch does not call F-46f0b3cb316e, does not perform the second source-token invocation of F-44362605ab79, and does not call F-4a6c0bf0740c.
 
-### 5. Conditional destination-offset-4 operation
+Every nonzero byte value selects this branch. No distinction is made among different nonzero status values.
 
-This sequence runs in either of these cases:
+### 5. Conditional destination-associated update
 
-- The tested status byte is nonzero.
-- The tested status byte is zero and F-4a6c0bf0740c returns nonzero.
+This step is reached in either of two cases:
 
-F-44362605ab79 is called with the **address of the working storage**, not with the original opaque input. Its 32-bit result is passed to F-151ab4bfe553 with the destination base plus 4 bytes as the first argument.
+- the first status byte was nonzero; or
+- it was zero and F-4a6c0bf0740c returned nonzero.
 
-The update is therefore based on the working state after all preceding calls on the selected branch. The visible body does not reuse an earlier representation of that state.
+The function calls F-44362605ab79 with the address of temporary B, rather than with the original source token.
 
-### 6. Final operation
+It then calls F-151ab4bfe553 with:
 
-On every normally completing branch, F-289ec4311c64 is called with the working-storage address.
+- the address 4 bytes beyond the destination base;
+- the result of that conversion call.
 
-This call occurs:
+In both cases, F-cec639934d47 has already been called on temporary B. The subsequent use of temporary B is explicit. It would therefore be unsupported to describe F-cec639934d47 as necessarily destroying or invalidating that storage.
 
-- After the conditional destination-offset-4 update, when that update is performed.
-- Immediately after the zero comparison outcome, when the update is skipped.
+### 6. Final temporary processing
 
-The function then returns without a value.
+All normal paths converge on a call to F-289ec4311c64 with the address of temporary B. The function then returns without an explicit value.
+
+Thus, on normal completion, F-289ec4311c64 is called once for temporary A and later once for temporary B. These calls resemble cleanup, but their actual ownership and resource effects are unknown.
 
 ## Side effects
 
-The function explicitly exposes the destination to F-151ab4bfe553 at two addresses:
+### Established call-mediated effects
 
-- Offset 12: one invocation on every normally progressing path.
-- Offset 4: one invocation only when the branch conditions permit it.
+The function supplies destination-derived addresses to F-151ab4bfe553:
 
-The visible body does not establish the width or complete range of memory modified by either invocation. These are addresses passed to a dependency, not proof of isolated four-byte field writes.
+- destination base plus 12 on every normally progressing invocation;
+- destination base plus 4 only under the branch conditions described above.
 
-Skipping the offset-4 update means only that the explicit update sequence is absent. It does **not** prove that memory at that offset remains unchanged: dependencies may mutate aliased memory or shared state.
+The first call occurs before the function knows whether the second call will be skipped. There is no visible rollback of the first operation.
 
-All local-storage contents are mediated through dependencies except for the explicit status-byte and adjacent-value reads. No direct clearing or initialization of these regions is visible.
+Dependencies also receive local-storage addresses and the source token. They may modify reachable storage or external state according to their own contracts. The evidence does not establish that any of them are pure or preserve globals.
 
-F-289ec4311c64 is called once for intermediate storage and once for working storage during normal completion. These calls resemble lifetime-ending operations, but their names and call positions do not establish release semantics. Likewise, F-cec639934d47 must not be assumed to free, normalize, retain, or invalidate the working state.
+When the second destination-associated call is skipped, the precise guarantee is that this function does not make that particular F-151ab4bfe553 call. It does **not** establish that memory at destination base plus 4 remains unchanged: another dependency could affect it through aliasing or external state.
 
-No ownership transfer, reference-count adjustment, allocation policy, or pointer-retention policy can be established. In particular, dependency contracts must determine whether passing stack-backed storage or values derived from it is safe.
+### Ownership and lifetime
 
-There is no visible error handling, retry, transactional restoration, or abnormal-exit cleanup. If any dependency does not return normally, later calls—including the final working-storage operation—are not guaranteed.
+Temporary-storage addresses are supplied during this invocation. Their storage does not provide a valid post-return lifetime for retained pointers.
+
+The function contains no explicit allocation or deallocation operation. Dependency names and placement are insufficient to establish resource acquisition, ownership transfer, reference-count changes, or destruction.
+
+No guarantee is established that the source token remains valid, retains its original contents, or has unchanged ownership after any dependency call.
+
+### Arithmetic and access constraints
+
+The two destination addresses use byte offsets of 12 and 4. This is address derivation, not a visible load of destination contents followed by an offset.
+
+The evidence presents a 32-bit address model but does not establish behavior for invalid bases, arithmetic overflow, wraparound, or addresses near the address-space boundary. Such cases are **documented_only**.
+
+The status decision reads one byte. The result decision tests a 32-bit integer for zero; both positive and negative nonzero values select the update path.
+
+### Errors and interrupted execution
+
+There are no visible null checks, bounds checks, explicit error returns, or local recovery handlers.
+
+A nonzero status byte is not itself established as an error. Likewise, a zero result from F-4a6c0bf0740c is only established as a reason to skip one update.
+
+If a dependency faults, throws, terminates execution, or otherwise fails to return normally, subsequent operations and final temporary processing are not guaranteed by the visible control flow.
 
 ## Dependencies
 
-| Opaque ID | Established role in this function |
+| Opaque function ID | Established role at this call site |
 |---|---|
-| F-44362605ab79 | Accepts one 32-bit argument and supplies a 32-bit result. Called with the original input initially, again on the zero-status path, and with the working-storage address when updating offset 4. |
-| F-151ab4bfe553 | Receives a destination-derived address and a result from F-44362605ab79. Invoked at offset 12 unconditionally and offset 4 conditionally. |
-| F-b9acea4b06ad | Receives intermediate-storage address and original input; supplies the value forwarded to F-b531694e1061. |
-| F-b531694e1061 | Receives working-storage address, the preceding result, constants 35 and zero, and status-storage address. Its return value is not consumed. |
-| F-289ec4311c64 | Receives intermediate-storage address before the status test and working-storage address before normal return. |
-| F-46f0b3cb316e | Receives working-storage address and original input only on the zero-status path. |
-| F-cec639934d47 | Receives working-storage address exactly once on either status branch during normal completion. |
-| F-4a6c0bf0740c | Receives the adjacent 32-bit value and a fresh input-derived result. A zero return suppresses the explicit offset-4 update. |
+| F-44362605ab79 | Accepts one argument and supplies a 32-bit result. Called with the source token initially, again on the zero-status branch, and with temporary B on update paths. |
+| F-151ab4bfe553 | Receives a destination-derived address and a captured result. Called unconditionally at offset 12 and conditionally at offset 4. |
+| F-b9acea4b06ad | Receives temporary A and the source token; supplies the value forwarded to F-b531694e1061. |
+| F-b531694e1061 | Receives temporary B, a preceding result, 35, zero, and status storage. Its return value is not consumed here. |
+| F-289ec4311c64 | Receives temporary A before the status test and temporary B at final convergence. |
+| F-46f0b3cb316e | Receives temporary B and the source token only when the tested status byte is zero. |
+| F-cec639934d47 | Receives temporary B exactly once on every normally completing branch, before any conditional second update. |
+| F-4a6c0bf0740c | Receives the adjacent word and a fresh source-token-derived result on the zero-status branch. Its zero/nonzero result controls whether the offset-4 update occurs. |
 
-All deeper dependency behavior is **documented_only**.
+No callee contract beyond these call-site facts is supplied.
 
 ## Acceptance examples
 
-These examples are conditional contracts, not observed executions. They assume valid dependency contracts and normal returns.
+These are conditional contract examples, not reported runtime tests. Each assumes valid dependency inputs and normal returns.
 
 ### Nonzero status
 
-If the status byte is nonzero when tested:
+Suppose the first status byte is nonzero when read after processing temporary A.
 
-- The offset-12 update has already occurred.
-- F-cec639934d47 is invoked on working storage.
-- F-46f0b3cb316e and F-4a6c0bf0740c are not invoked.
-- Working storage is passed to F-44362605ab79.
-- The resulting value is supplied to the offset-4 update.
-- The final working-storage call to F-289ec4311c64 occurs.
+Expected behavior:
 
-### Zero status and zero comparison result
+- The offset-12 destination-associated call has already occurred.
+- F-cec639934d47 is called on temporary B.
+- F-46f0b3cb316e and F-4a6c0bf0740c are not called.
+- F-44362605ab79 is called with temporary B, and its result is forwarded to F-151ab4bfe553 at offset 4.
+- Final processing of temporary B occurs.
 
-If the status byte is zero and F-4a6c0bf0740c returns zero:
+### Zero status with zero result
 
-- The offset-12 update still occurs.
-- F-46f0b3cb316e runs before F-cec639934d47.
-- A fresh input-based call to F-44362605ab79 precedes the comparison.
-- No working-storage call to F-44362605ab79 occurs.
-- No explicit offset-4 update occurs.
-- The final working-storage call to F-289ec4311c64 still occurs.
+Suppose the tested status byte is zero, the adjacent word is validly readable, and F-4a6c0bf0740c returns zero.
 
-### Zero status and nonzero comparison result
+Expected behavior:
 
-If the status byte is zero and the comparison returns any nonzero value, the zero-status preparation occurs, followed by the working-storage conversion and offset-4 update. Negative and positive comparison results have identical control-flow consequences.
+- F-46f0b3cb316e precedes F-cec639934d47.
+- A fresh source-token invocation of F-44362605ab79 precedes F-4a6c0bf0740c.
+- There is no temporary-B invocation of F-44362605ab79.
+- There is no F-151ab4bfe553 call at offset 4.
+- Final processing of temporary B still occurs.
 
-### Status-storage boundary
+### Zero status with nonzero result
 
-If the first status byte is zero but the remaining three status bytes are nonzero, the zero-status path is selected. Only the first byte participates in the visible decision.
+Under the same preconditions, if F-4a6c0bf0740c returns any nonzero 32-bit value, the temporary-B conversion and offset-4 destination-associated call both occur before final processing.
 
-### State-dependent conversion
+No sign-based distinction is made.
 
-If successive calls to F-44362605ab79 with the original input return different values, the first result is used for offset 12 and the second, if reached, is used for comparison. The function contains no equality check or caching requirement between those results.
+### Different repeated conversion results
 
-### Early interruption
+Suppose the initial source-token conversion returns one value and the zero-status branch’s later conversion returns another.
 
-If the intermediate-storage call to F-289ec4311c64 does not return normally, the status is not subsequently tested by this function, the offset-4 update is not reached, and the final working-storage operation is not guaranteed. The earlier offset-12 invocation has already occurred.
+The first value is used for the offset-12 call. The later value is passed to F-4a6c0bf0740c. They must not be merged or substituted merely because their input token is identical.
+
+### Interrupted dependency
+
+Suppose F-b531694e1061 does not return normally.
+
+The offset-12 destination-associated call has already occurred. The visible function provides no guarantee that either F-289ec4311c64 call, the status test, or the offset-4 call will occur.
 
 ## Uncertainties
 
 The following remain **documented_only**:
 
-- The semantic types of the destination and opaque input.
-- The destination object’s total size, alignment, and field layout.
-- Whether working storage and the adjacent value slot form one eight-byte object.
-- Which dependencies initialize the adjacent value slot.
-- Whether status is a success flag, match indicator, or another condition.
-- Whether 35 denotes a delimiter.
-- Whether F-4a6c0bf0740c implements equality, ordering, or another predicate.
-- Allocation, ownership, aliasing, retention, and release behavior.
-- Global-state mutation, reentrancy, concurrency, and exception behavior.
-- Input-domain behavior for null values, empty content, malformed representations, or embedded separators.
+- The concrete types and meanings of the source token and destination components.
+- Whether temporary B and the adjacent word form one larger object.
+- Which dependency initializes the status byte and adjacent word, and under what preconditions.
+- The semantic meaning of 35 and zero in F-b531694e1061.
+- Whether zero from F-4a6c0bf0740c means equality, success, absence, or something else.
+- Ownership, allocation, cleanup, and destruction semantics.
+- Permitted aliasing among source, destination, temporary-reachable state, and globals.
+- Invalid-address, overflow, exception, and nonlocal-exit behavior.
+- Any thread-safety or reentrancy guarantees.
 
-A plausible intent is to derive a component, compare a fallback against the original input, and suppress a redundant update. That interpretation is not required by the established call-level contract.
+The construction, cleanup, and comparison interpretations are plausible intent only. They are not prerequisites for the established call-order contract.
 
 ## Evidence
 
-The supplied static function body establishes argument forwarding, local storage widths, the two destination offsets, dependency-call order, the first-byte status test, and the zero-result branch that skips the offset-4 update.
+The supplied static representation establishes argument widths, local-storage extents, numeric offsets and constants, dependency-call order, the one-byte status test, and the 32-bit zero/nonzero result test.
 
-The dependency map supplies the opaque identities used here. No dependency implementation, caller contract, runtime trace, or execution result was provided. No runtime tests have been performed. Semantic interpretations beyond the visible operations remain explicitly unestablished.
+It does not supply dependency implementations, concrete data-type definitions, or runtime observations. The behavioral contract therefore distinguishes direct call-site evidence from inferred semantic roles and unresolved conditions.
+
+No runtime tests have been performed.
